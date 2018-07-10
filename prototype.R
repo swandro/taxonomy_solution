@@ -87,11 +87,44 @@ relative.abundance <- function(DF){
 
 collapse.to.level <- function(DF, LEVEL){
   ##Collapse a data frame to a level
-  return(summarize(group_by(DF, LEVEL, variable), value = sum(value)))
+  return(summarize(group_by_(DF, "variable", LEVEL), value = sum(value)))
 }
+
+
+detach(dat.melt)
 
 make.other.category <- function(DF, LEVEL, NUMBER){
   #Makes the other category for a melted data frame
+  #Uer specifies a number of categories
+  
+  #Get the names of the taxa to keep
+  temp <- summarize(group_by_(DF,LEVEL), value = sum(value))
+  taxa <- pull(temp[order(temp$value, decreasing = T),][LEVEL][1:NUMBER,1])
+  
+  ##Make the final data frame
+  result <- NULL
+  for (SAMPLE in levels(factor(DF$variable))){
+    temp <- data.frame(summarize(group_by_(subset(DF, variable%in%SAMPLE), LEVEL), value = sum(value)))
+    other.sum <- sum(temp[which(!temp[[LEVEL]]%in%taxa),]$value)
+    to.add <- temp[which(temp[[LEVEL]]%in%taxa),]
+    other.row <- c("Other", other.sum)
+    to.add <- rbind(to.add, other.row)
+    to.add$variable <- SAMPLE
+    result <- rbind(result, to.add)
+  }
+  return(result)
+}
+
+
+make.other.category.cutoff <- function(DF, LEVEL, NUMBER){
+  #Makes the other category for a melted data frame
+  #Uer specifies a percent cutoff. Requires a relative abundance data frame
+}
+
+unmelt <- function(DF, LEVEL){
+  #Unmelts data frame
+  temp <- dcast(DF, variable~ eval(LEVEL), value.var = "value")
+  return(temp)
 }
 
 
@@ -125,7 +158,7 @@ taxonomy.list <- rownames(dat)
 #Get the delimiter
 DELIMITER <- determine.delimiter(taxonomy.list[1])
 #Get the number of taxonomy levels
-TAX.COUNT <- lengths(regmatches(x, gregexpr(DELIMITER, taxonomy.list[1]))) + 1 #taxonomy fields is the number of delimiters + 1
+TAX.COUNT <- lengths(regmatches(taxonomy.list[1], gregexpr(DELIMITER, taxonomy.list[1]))) + 1 #taxonomy fields is the number of delimiters + 1
 #Create new columns for each taxonomy level
 lev.list <- c("L1", "L2", "L3", "L4", "L5", "L6", "L7", "L8", "L9", "L10")[1:TAX.COUNT]
 for (L in lev.list){
