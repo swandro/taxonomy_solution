@@ -47,30 +47,6 @@ format.taxonomy <- function(unformatted.string, delimiter=DELIMITER){
   return(taxonomies)
 }
 
-format.taxonomy.titles <- function(unformatted.string, delimiter=DELIMITER){
-  #Takes in the unformatted taonomy string and produces a vector of the taxonomy titles
-  
-  #Split by delimiter
-  tax.split <- unlist(strsplit(x = as.character(unformatted.string), split = delimiter))
-  titles <- c()
-  
-  for (level in tax.split){
-    level.split <- unlist(strsplit(x=level, split = '_'))
-    level.format <- paste(x = head(x = level.split, n =  -1), collapse = '')
-    titles <- c(titles, level.format)
-  }
-  
-  return(titles)
-}
-
-apply.format.taxonomy <- function(row){
-  #Function for apply that takes a row and adds in the taxonomy of all the present levels
-  #Assumes that the unformatted taxonomy is in a column calles "unformatted.taxonomy
-  
-  tax.vector <- format.taxonomy(row["unformatted.taxonomy"], delimiter = DELIMITER)
-  
-  
-}
 
 ########################################################################################
 
@@ -92,20 +68,45 @@ collapse.to.level <- function(DF, LEVEL){
 
 make.other.category <- function(DF, LEVEL, NUMBER){
   #Makes the other category for a melted data frame
+  #Decides top microbes by greatest sum in all samples
+  temp <- DF %>% group_by("LEVEL") %>% summarize(value=sum(value))
+  temp <- temp[order(temp$value, decreasing = T),]
+  top.taxa <- data.frame(temp[1:NUMBER,1]) 
+  #Add in "Other" only if it doesn't already exist
+  if(!"Other"%in%top.taxa){
+  top.taxa <- c(top.taxa, "Other")
+  }
+  
+  #Create other category and condenst into melted dataframe
+  temp2 <- DF
+  #Make a factor with the levels as the top microbes. All non top microbes will be NA
+  temp2[[LEVEL]] <- factor(temp2$L2, levels=top.taxa)
+  #Change all NA to "Other"
+  temp2[[LEVEL]][which(is.na(temp2[[LEVEL]]))] <- "Other"
+  temp2 <- temp2 %>% group_by(variable, "LEVEL") %>% summarize(value=sum(value))
+  colnames(temp2) <- c("variable","taxonomy","value")
+  
+  #Add back in metadata
+  
+  #Return the data frame
+  return(temp2)
 }
 
-
+#temp <- dcast(dat.melt, formula = variable~L2,value.var = "value",  fun.aggregate = sum )
+test <- make.other.category(DF=dat.melt, LEVEL="L3",NUMBER= 4)
 ########################################################################################
 
 #####Workflow###########################################################################
 
 #Load in the data
 dat <- test.file
+#Get samples in columns and bacteria in rows
 if (ORIENTATION){
   dat <- invert(test.file)
   class(dat) <- "numeric"
   dat <- data.frame(dat, check.names = F)
 }
+
 #Get relative abundance
 ##Needs to be data frame with first column is sample names
 sums <- apply(dat, 2, sum)
@@ -125,7 +126,7 @@ taxonomy.list <- rownames(dat)
 #Get the delimiter
 DELIMITER <- determine.delimiter(taxonomy.list[1])
 #Get the number of taxonomy levels
-TAX.COUNT <- lengths(regmatches(x, gregexpr(DELIMITER, taxonomy.list[1]))) + 1 #taxonomy fields is the number of delimiters + 1
+TAX.COUNT <- lengths(regmatches(DELIMITER, gregexpr(DELIMITER, taxonomy.list[1]))) + 1 #taxonomy fields is the number of delimiters + 1
 #Create new columns for each taxonomy level
 lev.list <- c("L1", "L2", "L3", "L4", "L5", "L6", "L7", "L8", "L9", "L10")[1:TAX.COUNT]
 for (L in lev.list){
@@ -135,10 +136,10 @@ for (L in lev.list){
 
 #Add taxonomy columns to data frame
 for (i in seq(nrow(dat))){
-  taxonomies <- format.taxonomy(rownames(dat[i,]))
+  taxonomies <- format.taxonomy(rownames(dat)[i])
   for (j in seq(length(taxonomies))){
     dat[i,lev.list[j]] <- taxonomies[j]
-    dat.relative[i,lev.list[j]] <- taxonomies[j]
+    dat[i,lev.list[j]] <- taxonomies[j]
   }
 }
 
@@ -147,3 +148,8 @@ dat.melt <- melt(dat, id.vars = lev.list)
 dat.relative.melt <- melt(dat.relative, id.vars = lev.list)
 
 ########################################################################################
+
+
+
+
+
