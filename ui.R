@@ -2,9 +2,11 @@ fluidPage(
   titlePanel("Taxonomy Solution"),
   sidebarLayout(
     sidebarPanel(
-      fileInput(inputId = "FILE", label = "Upload OTU table", buttonLabel = "Upload")
+      fileInput(inputId = "file1", 
+                label = "Upload OTU table", 
+                buttonLabel = "Upload")
     ),
     mainPanel(
-      tableOutput(outputId = "view"), width = 8)
+      plotOutput(outputId = "graph"), width = 8)
   )
 )

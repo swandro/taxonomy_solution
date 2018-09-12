@@ -2,22 +2,189 @@ library(reshape2)
 library(dplyr)
 
 function(input, output){
-  output$contents <- renderTable({
-    # input$file1 will be NULL initially. After the user selects
-    # and uploads a file, it will be a data frame with 'name',
-    # 'size', 'type', and 'datapath' columns. The 'datapath'
-    # column will contain the local filenames where the data can
-    # be found.
-    inFile <- input$OTU
+  
+  # output$preview <- renderTable({
+  #   
+  #   return(head(df))
+  # })
+  
+  
+  req(input$file1)
+  dat <- read.delim(file = input$file1$datapath, header = T, sep = '\t', check.names = F)
+  
+  #####Data importing and formatting functions###################################################################
+  determine.delimiter <- function(string){
+    #Determines what character separates the different levels of taxonomy
+    string <- as.character(string)
+    char.list <- unlist(strsplit(x= string, split = ''))   #Get a vector of all characters
+    for (delim in c(":", ";", "|")){
+      if (delim%in%char.list){
+        return(delim)
+      }
+    }
+    stop("Could not determine delimeter")
+  }
+  
+  invert <- function(x){
+    #inverts matrix so that samples are the columns
+    inverted <- t(x)
+    colnames(inverted) <- inverted[1,]
+    inverted <- inverted[-1,]
+  }
+  
+  format.taxonomy <- function(unformatted.string, delimiter=DELIMITER){
+    #Takes in an unformatted taxonomy string and the delimiter and produces a vector of the taxonomies without the titles
+    #Assumes the taxonomy is separated by underscores ex. "s__Enterococcus;g__faecium"
     
-    if (is.null(inFile))
-      return(NULL)
+    #Split by delimiter
+    tax.split <- unlist(strsplit(x = as.character(unformatted.string), split = delimiter))
+    taxonomies <- c()
     
-    output$dat <- read.delim(file = inFile$datapath, header = T, sep = '\t', check.names = F)
+    for (level in tax.split){
+      #Split by the underscore and store the last value as the taxonomy name
+      level.split <- unlist(strsplit(x=level, split = '_'))
+      taxonomies <- c(taxonomies, rev(level.split)[1])
+      #get the level of the taxonomy by taking everything else that isn't an underscore
+      
+    }
+    
+    return(taxonomies)
+  }
+  
+  
+  ########################################################################################
+  
+  ###Formatting output functions#########################
+  
+  ##MELTED RELATIVE ABUNDANCE
+  relative.abundance <- function(DF){
+    #Takes in the melted data frame and makes it relative abundance
+    sums <- summarize(group_by(dat.melt, variable), SUM=sum(value))
+    result <- apply(dat.melt, 1, function(x){
+      return(as.numeric(x["value"])/subset(sums, variable==x["variable"])$SUM)
+    })
+  }
+  
+  collapse.to.level <- function(DF, LEVEL){
+    ##Collapse a data frame to a level
+    return(summarize(group_by(DF, LEVEL, variable), value = sum(value)))
+  }
+  
+  make.other.category <- function(DF, LEVEL, NUMBER){
+    #Makes the other category for a melted data frame
+    #Decides top microbes by greatest sum in all samples
+    temp <- DF %>% group_by_(LEVEL) %>% summarize(value=sum(value))
+    temp <- temp[order(temp$value, decreasing = T),]
+    top.taxa <- data.frame(temp[1:NUMBER,1])[,1]
+    #Add in "Other" only if it doesn't already exist
+    if(!"Other"%in%top.taxa){
+      top.taxa <- c(top.taxa, "Other")
+    }
+    
+    #Create other category and condenst into melted dataframe
+    temp2 <- DF
+    #Make a factor with the levels as the top microbes. All non top microbes will be NA
+    temp2[[LEVEL]] <- factor(temp2[[LEVEL]], levels=top.taxa)
+    #Change all NA to "Other"
+    temp2[[LEVEL]][which(is.na(temp2[[LEVEL]]))] <- "Other"
+    temp2 <- temp2 %>% group_by_("variable", LEVEL) %>% summarize(value=sum(value))
+    colnames(temp2) <- c("variable","taxonomy","value")
+    
+    #Add back in metadata
+    
+    #Return the data frame
+    return(temp2)
+  }
+  
+  #temp <- dcast(dat.melt, formula = variable~L2,value.var = "value",  fun.aggregate = sum )
+  
+  ########################################################################################
+  
+  #####Workflow###########################################################################
+  
+  #Load in the data
+  
+  #Get samples in columns and bacteria in rows
+  if (ORIENTATION){
+    dat <- invert(test.file)
+    class(dat) <- "numeric"
+    dat <- data.frame(dat, check.names = F)
+  }
+  
+  #Get relative abundance
+  ##Needs to be data frame with first column is sample names
+  sums <- apply(dat, 2, sum)
+  #NORMALIZE
+  dat.relative <- NULL
+  for (i in seq(ncol(dat))){
+    dat.relative <- cbind(dat.relative, dat[,i]/sums[i])
+  }
+  colnames(dat.relative) <- colnames(dat)
+  rownames(dat.relative) <- rownames(dat)
+  dat.relative <- data.frame(dat.relative, check.names = F)
+  
+  
+  ####Format taxonomy
+  #Get vector of all taxonomies
+  taxonomy.list <- rownames(dat)
+  #Get the delimiter
+  DELIMITER <- determine.delimiter(taxonomy.list[1])
+  #Get the number of taxonomy levels
+  TAX.COUNT <- lengths(regmatches(DELIMITER, gregexpr(DELIMITER, taxonomy.list[1]))) + 1 #taxonomy fields is the number of delimiters + 1
+  #Create new columns for each taxonomy level
+  lev.list <- c("L1", "L2", "L3", "L4", "L5", "L6", "L7", "L8", "L9", "L10")[1:TAX.COUNT]
+  for (L in lev.list){
+    dat[[L]] <- NA
+    dat.relative[[L]] <- NA
+  }
+  
+  #Add taxonomy columns to data frame
+  for (i in seq(nrow(dat))){
+    taxonomies <- format.taxonomy(rownames(dat)[i])
+    for (j in seq(length(taxonomies))){
+      dat[i,lev.list[j]] <- taxonomies[j]
+      dat[i,lev.list[j]] <- taxonomies[j]
+    }
+  }
+  
+  #Melt data
+  dat.melt <- melt(dat, id.vars = lev.list)
+  dat.relative.melt <- melt(dat.relative, id.vars = lev.list)
+  
+  
+  #Make other category
+  dat.melt.other <- make.other.category(DF=dat.melt, LEVEL="L4",NUMBER= 4)
+  
+  
+  #plot data
+  
+  genus.colors <- c("#a6cee3", "#1f78b4", "#b2df8a","#33a02c","#fb9a99",
+                    "#e31a1c", "#fdbf6f", "#ff7f00", "#6a3d9a","grey",
+                    "#ffff99", "#b15928")
+  phylum.colors <- c('#a6cee3','#1f78b4','#b2df8a','#33a02c','#fb9a99','#e31a1c','#fdbf6f')
+  
+ggfig <-   ggplot(dat.melt.other ,aes(x=variable,y=value,fill=taxonomy)) + 
+    geom_bar(stat="identity", width =.9) + 
+    scale_y_continuous(expand = c(0.01,0.01)) +
+    labs(title=" ",x="",y="Relative Abundance", fill= "Bacteria") +
+    theme(plot.title=element_text(size=12,hjust= 0.5),
+          axis.title=element_text(size=20),
+          axis.text=element_text(size=10),
+          axis.text.x = element_text(angle=-90,vjust=.5, color="black", size=15),
+          axis.text.y = element_text(size=15),
+          strip.text=element_text(size=15),
+          legend.text=element_text(size=15),
+          legend.title=element_text(size=20),
+          strip.background=element_rect(color="black", fill=NA,size=.5),
+          panel.background=element_rect(fill=NA, color="black",size=.5),
+          panel.grid=element_blank()) +
+    scale_fill_manual(values = phylum.colors) 
+  
+  ########################################################################################
+  
+  output$graph <- renderPlot({
+    ggfig
   })
   
-  output$view <- renderTable({
-    head(datasetInput(), n = isolate(input$obs))
-  })
   
 }

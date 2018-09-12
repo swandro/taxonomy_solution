@@ -70,9 +70,9 @@ collapse.to.level <- function(DF, LEVEL){
 make.other.category <- function(DF, LEVEL, NUMBER){
   #Makes the other category for a melted data frame
   #Decides top microbes by greatest sum in all samples
-  temp <- DF %>% group_by("LEVEL") %>% summarize(value=sum(value))
+  temp <- DF %>% group_by_(LEVEL) %>% summarize(value=sum(value))
   temp <- temp[order(temp$value, decreasing = T),]
-  top.taxa <- data.frame(temp[1:NUMBER,1]) 
+  top.taxa <- data.frame(temp[1:NUMBER,1])[,1]
   #Add in "Other" only if it doesn't already exist
   if(!"Other"%in%top.taxa){
   top.taxa <- c(top.taxa, "Other")
@@ -81,10 +81,10 @@ make.other.category <- function(DF, LEVEL, NUMBER){
   #Create other category and condenst into melted dataframe
   temp2 <- DF
   #Make a factor with the levels as the top microbes. All non top microbes will be NA
-  temp2[[LEVEL]] <- factor(temp2$L2, levels=top.taxa)
+  temp2[[LEVEL]] <- factor(temp2[[LEVEL]], levels=top.taxa)
   #Change all NA to "Other"
   temp2[[LEVEL]][which(is.na(temp2[[LEVEL]]))] <- "Other"
-  temp2 <- temp2 %>% group_by(variable, "LEVEL") %>% summarize(value=sum(value))
+  temp2 <- temp2 %>% group_by_("variable", LEVEL) %>% summarize(value=sum(value))
   colnames(temp2) <- c("variable","taxonomy","value")
   
   #Add back in metadata
@@ -94,7 +94,7 @@ make.other.category <- function(DF, LEVEL, NUMBER){
 }
 
 #temp <- dcast(dat.melt, formula = variable~L2,value.var = "value",  fun.aggregate = sum )
-test <- make.other.category(DF=dat.melt, LEVEL="L3",NUMBER= 4)
+
 ########################################################################################
 
 #####Workflow###########################################################################
@@ -147,6 +147,35 @@ for (i in seq(nrow(dat))){
 #Melt data
 dat.melt <- melt(dat, id.vars = lev.list)
 dat.relative.melt <- melt(dat.relative, id.vars = lev.list)
+
+
+#Make other category
+dat.melt.other <- make.other.category(DF=dat.melt, LEVEL="L4",NUMBER= 4)
+
+
+#plot data
+
+genus.colors <- c("#a6cee3", "#1f78b4", "#b2df8a","#33a02c","#fb9a99",
+                  "#e31a1c", "#fdbf6f", "#ff7f00", "#6a3d9a","grey",
+                  "#ffff99", "#b15928")
+phylum.colors <- c('#a6cee3','#1f78b4','#b2df8a','#33a02c','#fb9a99','#e31a1c','#fdbf6f')
+
+ggplot(dat.melt.other ,aes(x=variable,y=value,fill=taxonomy)) + 
+  geom_bar(stat="identity", width =.9) + 
+  scale_y_continuous(expand = c(0.01,0.01)) +
+  labs(title=" ",x="",y="Relative Abundance", fill= "Bacteria") +
+  theme(plot.title=element_text(size=12,hjust= 0.5),
+        axis.title=element_text(size=20),
+        axis.text=element_text(size=10),
+        axis.text.x = element_text(angle=-90,vjust=.5, color="black", size=15),
+        axis.text.y = element_text(size=15),
+        strip.text=element_text(size=15),
+        legend.text=element_text(size=15),
+        legend.title=element_text(size=20),
+        strip.background=element_rect(color="black", fill=NA,size=.5),
+        panel.background=element_rect(fill=NA, color="black",size=.5),
+        panel.grid=element_blank()) +
+  scale_fill_manual(values = phylum.colors) 
 
 ########################################################################################
 
