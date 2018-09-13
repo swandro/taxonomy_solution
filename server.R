@@ -5,12 +5,15 @@ library(shiny)
 
 
 #####Data importing and formatting functions###################################################################
-foo <- function(){return("hohoho")}
+
 determine.delimiter <- function(string){
   #Determines what character separates the different levels of taxonomy
   string <- as.character(string)
   char.list <- unlist(strsplit(x= string, split = ''))   #Get a vector of all characters
-  for (delim in c(":", ";", "|")){
+  if ("|"%in%char.list){
+    return("\\|")
+  }
+  for (delim in c(":", ";")){
     if (delim%in%char.list){
       return(delim)
     }
@@ -23,6 +26,19 @@ invert <- function(x){
   inverted <- t(x)
   colnames(inverted) <- inverted[1,]
   inverted <- inverted[-1,]
+  class(inverted) <- "numeric"
+  inverted <- data.frame(inverted, check.names = F)
+  return(inverted)
+}
+
+format.samples.in.columns <- function(x){
+  rownames(x) <- x[,1]
+  temp <- x
+  x <- x[,-1]
+  x <- data.frame(x)
+  colnames(x) <- colnames(temp)[-1]
+  rownames(x) <- rownames(temp)
+  return(x)
 }
 
 format.taxonomy <- function(unformatted.string, delimiter){
@@ -42,6 +58,23 @@ format.taxonomy <- function(unformatted.string, delimiter){
   }
   
   return(taxonomies)
+}
+
+shorten.levels <- function(x, DELIMITER){
+  #Determines if taxonomy is redundant and only returns the deepest level
+  last <- rownames(x)[nrow(x)]
+  number <- length(unlist(strsplit(last, split = DELIMITER)))
+  result <- NULL
+  rnames <- c()
+  for (i in seq(nrow(x))){
+    if (length(unlist(strsplit(rownames(x)[i], split = DELIMITER))) == number){
+      result <- rbind(result,x[i,])
+      rnames <- c(rnames,rownames(x)[i])
+    }
+  }
+  result <- data.frame(result, check.names = F)
+  rownames(result) <- rnames
+  return(result)
 }
 
 
@@ -92,11 +125,17 @@ make.other.category <- function(DF, LEVEL, NUMBER){
 }
 ########################################################################################
 
+
+##Sample data######
+sample.data <- read.delim(file = "sample_data.tsv", header = T, sep = '\t', check.names = F)
+sample.data <- invert(sample.data)
+###########
+
+
 ###Colors######
 genus.colors <- c("#a6cee3", "#1f78b4", "#b2df8a","#33a02c","#fb9a99",
-                  "#e31a1c", "#fdbf6f", "#ff7f00", "#6a3d9a","grey",
+                  "#e31a1c", "#fdbf6f", "#ff7f00", "#cab2d6","#6a3d9a",
                   "#ffff99", "#b15928")
-phylum.colors <- c('#a6cee3','#1f78b4','#b2df8a','#33a02c','#fb9a99','#e31a1c','#fdbf6f')
 ################
 
 
@@ -105,43 +144,35 @@ phylum.colors <- c('#a6cee3','#1f78b4','#b2df8a','#33a02c','#fb9a99','#e31a1c','
 function(input, output){
 
   #####Workflow###########################################################################
-
+  
   #Load in the data
-  melted.raw.dat <- reactive ({
+  uploaded.dat <- reactive ({
     req(input$file1)
-    dat <- read.delim(file = input$file1$datapath, header = T, sep = '\t', check.names = F)
-    #Get samples in columns and bacteria in rows
-    if (input$SAMPLES.IN.ROWS){
-      dat <- invert(dat)
-      class(dat) <- "numeric"
-      dat <- data.frame(dat, check.names = F)
-    } else{
-      rownames(dat) <- dat[,1]
-      dat <- dat[,-1]
-    }
+      dat <- read.delim(file = input$file1$datapath, header = T, sep = '\t', check.names = F)
+      #Get samples in columns and bacteria in rows
+      if (input$SAMPLES.IN.ROWS){
+        dat <- invert(dat)
+      } else{
+        dat <- format.samples.in.columns(dat)
+      }
+  })
+
   
-    #Get relative abundance
-    # ##Needs to be data frame with first column is sample names
-    # sums <- apply(dat[,-1], 2, sum)
-    # #NORMALIZE
-    # dat.relative <- NULL
-    # for (i in seq(ncol(dat))){
-    #   dat.relative <- cbind(dat.relative, dat[,i]/sums[i])
-    # }
-    # colnames(dat.relative) <- colnames(dat)
-    # rownames(dat.relative) <- rownames(dat)
-    # dat.relative <- data.frame(dat.relative, check.names = F)
-  
-  
+  melted.raw.dat <- reactive({
+    dat <- uploaded.dat()
     ####Format taxonomy
     #Get vector of all taxonomies
     taxonomy.list <- rownames(dat)
     #Get the delimiter
-    DELIMITER <- determine.delimiter(taxonomy.list[1])
+    #browser()
+    DELIMITER <- determine.delimiter(taxonomy.list[length(taxonomy.list)])
+    
+    dat <- shorten.levels(dat, DELIMITER)
     #Get the number of taxonomy levels
     
-    TAX.COUNT <- lengths(regmatches(DELIMITER, gregexpr(DELIMITER, taxonomy.list[1]))) + 1 #taxonomy fields is the number of delimiters + 1
+    TAX.COUNT <- lengths(regmatches(DELIMITER, gregexpr(DELIMITER, taxonomy.list[length(taxonomy.list)]))) + 1 #taxonomy fields is the number of delimiters + 1
     #Create new columns for each taxonomy level
+    
     lev.list <- c("L1", "L2", "L3", "L4", "L5", "L6", "L7", "L8", "L9", "L10")[1:TAX.COUNT]
     for (L in lev.list){
       dat[[L]] <- NA
@@ -156,10 +187,11 @@ function(input, output){
         dat[i,lev.list[j]] <- taxonomies[j]
       }
     }
-  
     #Melt data
     dat.melt <- melt(dat, id.vars = lev.list)
     #dat.relative.melt <- melt(dat.relative, id.vars = lev.list)
+    
+    #Get number of samples
     
     #Return the melted raw dat
     return(dat.melt)
@@ -173,21 +205,32 @@ function(input, output){
   })
 
   output$top.taxa.table <- renderTable({
-    input$TaxLev
-    input$num.taxa
     data <- melted.other.dat()
     data.condensed <- data %>% 
       group_by(taxonomy) %>% 
       summarize(abundance = round(sum(value), 1)) %>%
       as.data.frame()
+    tot <- sum(data.condensed[,2])
+    data.condensed[,2] <- data.condensed[,2]/tot
     return(data.condensed)
-    
+  })
+  
+  testing <- reactive({
+    input$graph.button
+    isolate(
+    if (as.numeric(input$WIDTH) > 1400){
+      return(1400)
+    } else{
+   return(as.numeric(input$WIDTH))
+    }
+    )
   })
   
   output$graph <- renderPlot({
     input$graph.button
     isolate({
-      fig <- melted.other.dat()
+    fig <- melted.other.dat()
+    color <- c(genus.colors[1:length(levels(factor(fig$taxonomy)))-1],"grey")
       ggplot(data = fig ,aes(x=variable,y=value,fill=taxonomy)) +
       geom_bar(stat="identity", width =.9) +
       scale_y_continuous(expand = c(0.01,0.01)) +
@@ -203,18 +246,36 @@ function(input, output){
             strip.background=element_rect(color="black", fill=NA,size=.5),
             panel.background=element_rect(fill=NA, color="black",size=.5),
             panel.grid=element_blank()) +
-      scale_fill_manual(values = genus.colors)
+      scale_fill_manual(values = color)
     })
-  })
+  }, width = testing)
   
   output$Download <- downloadHandler(
     filename= function(){
-      print("abcde.tsv")
+      paste("Condensed_otu_table.tsv")
     },
     content= function(file){
-      write.table(fig, file, sep = '\t',row.names=FALSE)
+      data <- melted.other.dat()
+      if(!input$DOWNLOAD.MELTED) {
+        data <- dcast(data = data, formula = variable~taxonomy, fill="value")
+      } 
+      write.table(data, file, sep = '\t',row.names=FALSE,quote = F)
     }
   )
 
   
 }
+
+
+
+#Get relative abundance
+# ##Needs to be data frame with first column is sample names
+# sums <- apply(dat[,-1], 2, sum)
+# #NORMALIZE
+# dat.relative <- NULL
+# for (i in seq(ncol(dat))){
+#   dat.relative <- cbind(dat.relative, dat[,i]/sums[i])
+# }
+# colnames(dat.relative) <- colnames(dat)
+# rownames(dat.relative) <- rownames(dat)
+# dat.relative <- data.frame(dat.relative, check.names = F)
