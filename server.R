@@ -127,7 +127,7 @@ make.other.category <- function(DF, LEVEL, NUMBER){
 
 
 ##Sample data######
-sample.data <- read.delim(file = "sample_data.tsv", header = T, sep = '\t', check.names = F)
+sample.data <- read.delim(file = "test.tsv", header = T, sep = '\t', check.names = F)
 sample.data <- invert(sample.data)
 ###########
 
@@ -141,42 +141,76 @@ genus.colors <- c("#a6cee3", "#1f78b4", "#b2df8a","#33a02c","#fb9a99",
 
 
 
-function(input, output){
+function(input, output, session){
 
   #####Workflow###########################################################################
   
+  SWITCH <- reactiveValues(sample.data=FALSE, any.data=FALSE)
+  NUMBER.SAMPLES <- reactiveValues(num=8)
+  X.INPUT.CHANGED <- reactiveValues(q=FALSE)
+  
+  observeEvent(input$use.sample.data,{
+    SWITCH$sample.data <<- TRUE
+    SWITCH$any.data <<- TRUE
+    X.INPUT.CHANGED$q <<- FALSE
+    })
+  observeEvent(input$WIDTH!=800,{
+    X.INPUT.CHANGED$q <<- TRUE
+  })
+  
+  observeEvent(input$file1,{
+    X.INPUT.CHANGED$q <<- FALSE
+    uploaded.dat()
+  })
+  
+  # output$testing <- renderText({
+  #   print("hello")
+  #   SWITCH$sample.dat <<- TRUE
+  # })
+
   #Load in the data
   uploaded.dat <- reactive ({
-    req(input$file1)
-      dat <- read.delim(file = input$file1$datapath, header = T, sep = '\t', check.names = F)
-      #Get samples in columns and bacteria in rows
-      if (input$SAMPLES.IN.ROWS){
-        dat <- invert(dat)
-      } else{
-        dat <- format.samples.in.columns(dat)
-      }
+    #req(input$file1)
+    SWITCH$sample.data <<- FALSE
+    SWITCH$any.data <<- TRUE
+    dat <- read.delim(file = input$file1$datapath, header = T, sep = '\t', check.names = F)
+    #Deal with docs with double header lines
+    if (colnames(dat)[1]=="ID" & dat[1,1]=="#SampleID"){
+      dat <- dat[-1,]
+    }
+    #Get samples in columns and bacteria in rows
+    if (input$SAMPLES.IN.ROWS){
+      dat <- invert(dat)
+    } else{
+      dat <- format.samples.in.columns(dat)
+    }
+    return(dat)
   })
 
   
   melted.raw.dat <- reactive({
+    req(SWITCH$any.data)
+    if (SWITCH$sample.data){
+      dat <- sample.data
+    } else {
     dat <- uploaded.dat()
+    } 
     ####Format taxonomy
     #Get vector of all taxonomies
     taxonomy.list <- rownames(dat)
     #Get the delimiter
-    #browser()
     DELIMITER <- determine.delimiter(taxonomy.list[length(taxonomy.list)])
     
+    #If the taxa is redundant because there are multiple levels, remove redundant info
     dat <- shorten.levels(dat, DELIMITER)
+    
     #Get the number of taxonomy levels
-    
     TAX.COUNT <- lengths(regmatches(DELIMITER, gregexpr(DELIMITER, taxonomy.list[length(taxonomy.list)]))) + 1 #taxonomy fields is the number of delimiters + 1
-    #Create new columns for each taxonomy level
     
+    #Create new columns for each taxonomy level
     lev.list <- c("L1", "L2", "L3", "L4", "L5", "L6", "L7", "L8", "L9", "L10")[1:TAX.COUNT]
     for (L in lev.list){
       dat[[L]] <- NA
-      #dat.relative[[L]] <- NA
     }
   
     #Add taxonomy columns to data frame
@@ -187,11 +221,13 @@ function(input, output){
         dat[i,lev.list[j]] <- taxonomies[j]
       }
     }
+    
     #Melt data
     dat.melt <- melt(dat, id.vars = lev.list)
-    #dat.relative.melt <- melt(dat.relative, id.vars = lev.list)
-    
+    dat.melt$value <- as.numeric(dat.melt$value)
+
     #Get number of samples
+    NUMBER.SAMPLES$num <<- length(levels(factor(dat.melt$variable)))
     
     #Return the melted raw dat
     return(dat.melt)
@@ -215,23 +251,26 @@ function(input, output){
     return(data.condensed)
   })
   
-  testing <- reactive({
+  x.size <- reactive({
     input$graph.button
-    isolate(
-    if (as.numeric(input$WIDTH) > 1400){
-      return(1400)
+    if (isolate(X.INPUT.CHANGED$q)){
+      # if (as.numeric(input$WIDTH) > 1400){
+      #   return(1400)
+      # } else{
+     return(as.numeric(isolate(input$WIDTH)))
     } else{
-   return(as.numeric(input$WIDTH))
+      val <- 250 + (as.numeric(isolate(NUMBER.SAMPLES$num))-1)*20
+      updateNumericInput(session, "WIDTH", value=val )
+      return(val)
     }
-    )
   })
   
   output$graph <- renderPlot({
     input$graph.button
     isolate({
-    fig <- melted.other.dat()
-    color <- c(genus.colors[1:length(levels(factor(fig$taxonomy)))-1],"grey")
-      ggplot(data = fig ,aes(x=variable,y=value,fill=taxonomy)) +
+    fig.data <- melted.other.dat()
+    color <- c(genus.colors[1:length(levels(factor(fig.data$taxonomy)))-1],"grey")
+      ggplot(data = fig.data ,aes(x=variable,y=value,fill=taxonomy)) +
       geom_bar(stat="identity", width =.9) +
       scale_y_continuous(expand = c(0.01,0.01)) +
       labs(title=" ",x="",y="Relative Abundance", fill= "") +
@@ -241,14 +280,14 @@ function(input, output){
             axis.text.x = element_text(angle=-90,vjust=.5, hjust=0,color="black", size=as.numeric(input$X.size)),
             axis.text.y = element_text(size=15),
             strip.text=element_text(size=15),
-            legend.text=element_text(size=15),
+            legend.text=element_text(size=as.numeric(input$LEGEND.SIZE)),
             legend.title=element_text(size=20),
             strip.background=element_rect(color="black", fill=NA,size=.5),
             panel.background=element_rect(fill=NA, color="black",size=.5),
             panel.grid=element_blank()) +
       scale_fill_manual(values = color)
     })
-  }, width = testing)
+  }, width = x.size)
   
   output$Download <- downloadHandler(
     filename= function(){
@@ -263,7 +302,7 @@ function(input, output){
     }
   )
 
-  
+
 }
 
 
