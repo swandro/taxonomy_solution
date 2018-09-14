@@ -127,7 +127,7 @@ make.other.category <- function(DF, LEVEL, NUMBER){
 
 
 ##Sample data######
-sample.data <- read.delim(file = "test.tsv", header = T, sep = '\t', check.names = F)
+sample.data <- read.delim(file = "test.txt", header = T, sep = '\t', check.names = F)
 sample.data <- invert(sample.data)
 ###########
 
