@@ -127,7 +127,7 @@ make.other.category <- function(DF, LEVEL, NUMBER){
 
 
 ##Sample data######
-sample.data <- read.delim(file = "test.txt", header = T, sep = '\t', check.names = F)
+sample.data <- read.delim(file = "sample_data.tsv", header = T, sep = '\t', check.names = F)
 sample.data <- invert(sample.data)
 ###########
 
@@ -251,6 +251,11 @@ function(input, output, session){
     return(data.condensed)
   })
   
+  y.size <- reactive({
+    input$graph.button
+    return(isolate(as.numeric(input$HEIGHT)))
+  })
+  
   x.size <- reactive({
     input$graph.button
     if (isolate(X.INPUT.CHANGED$q)){
@@ -272,13 +277,13 @@ function(input, output, session){
     color <- c(genus.colors[1:length(levels(factor(fig.data$taxonomy)))-1],"grey")
       ggplot(data = fig.data ,aes(x=variable,y=value,fill=taxonomy)) +
       geom_bar(stat="identity", width =.9) +
-      scale_y_continuous(expand = c(0.01,0.01)) +
+      scale_y_continuous(expand = c(0.002,0.002)) +
       labs(title=" ",x="",y="Relative Abundance", fill= "") +
       theme(plot.title=element_text(size=12,hjust= 0.5),
-            axis.title=element_text(size=20),
+            axis.title=element_text(size=as.numeric(input$Y.title.size)),
             axis.text=element_text(size=10),
             axis.text.x = element_text(angle=-90,vjust=.5, hjust=0,color="black", size=as.numeric(input$X.size)),
-            axis.text.y = element_text(size=15),
+            axis.text.y = element_text(size= as.numeric(input$Y.size), color="black"),
             strip.text=element_text(size=15),
             legend.text=element_text(size=as.numeric(input$LEGEND.SIZE)),
             legend.title=element_text(size=20),
@@ -287,34 +292,20 @@ function(input, output, session){
             panel.grid=element_blank()) +
       scale_fill_manual(values = color)
     })
-  }, width = x.size)
+  }, width = x.size, height = y.size)
   
   output$Download <- downloadHandler(
     filename= function(){
       paste("Condensed_otu_table.tsv")
     },
     content= function(file){
-      data <- melted.other.dat()
-      if(!input$DOWNLOAD.MELTED) {
+      data <- melted.raw.dat()
+      if(input$DOWNLOAD.OPTIONS=="Cond") {
+        data <- melted.other.dat()
         data <- dcast(data = data, formula = variable~taxonomy, fill="value")
       } 
       write.table(data, file, sep = '\t',row.names=FALSE,quote = F)
     }
   )
-
-
+  
 }
-
-
-
-#Get relative abundance
-# ##Needs to be data frame with first column is sample names
-# sums <- apply(dat[,-1], 2, sum)
-# #NORMALIZE
-# dat.relative <- NULL
-# for (i in seq(ncol(dat))){
-#   dat.relative <- cbind(dat.relative, dat[,i]/sums[i])
-# }
-# colnames(dat.relative) <- colnames(dat)
-# rownames(dat.relative) <- rownames(dat)
-# dat.relative <- data.frame(dat.relative, check.names = F)
