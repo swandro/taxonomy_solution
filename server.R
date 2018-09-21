@@ -13,7 +13,7 @@ determine.delimiter <- function(string){
   if ("|"%in%char.list){
     return("\\|")
   }
-  for (delim in c(":", ";")){
+  for (delim in c(":", ";","_")){
     if (delim%in%char.list){
       return(delim)
     }
