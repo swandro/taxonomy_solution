@@ -198,12 +198,25 @@ function(input, output, session){
     ####Format taxonomy
     #Get vector of all taxonomies
     taxonomy.list <- rownames(dat)
+    #if the last row is unclassified, remove the row
+    if (taxonomy.list[length(taxonomy.list)]=="unclassified"){
+      dat <- dat[-nrow(dat),]
+      taxonomy.list <- rownames(dat)
+    }
     #Get the delimiter
     DELIMITER <- determine.delimiter(taxonomy.list[length(taxonomy.list)])
     
     #If the taxa is redundant because there are multiple levels, remove redundant info
     dat <- shorten.levels(dat, DELIMITER)
     
+    #normalize data
+    if (input$NORMALIZE){
+      sums <- apply(dat, 2, sum)
+      sums[which(sums==0)] <- 1
+      for (i in seq(ncol(dat))){
+        dat[,i] <- dat[,i]/sums[i]
+      }
+    }
     #Get the number of taxonomy levels
     TAX.COUNT <- lengths(regmatches(DELIMITER, gregexpr(DELIMITER, taxonomy.list[length(taxonomy.list)]))) + 1 #taxonomy fields is the number of delimiters + 1
     

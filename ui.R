@@ -25,7 +25,9 @@ fluidPage(
                       selected = "L2",
                       width=170),
           numericInput(inputId= "num.taxa", label = "Number of taxa to plot", value = 3,min = 1, max=11, width=170),
-          actionButton("graph.button",tags$strong("Plot"), width=170, style='padding:20px'))
+          actionButton("graph.button",tags$strong("Plot"), width=170, style='padding:20px'),
+          checkboxInput(inputId = "NORMALIZE", label= "Relative abundance", value=FALSE)
+          )
         ),
   fluidRow(h3("Plot options"),
     column(3,
