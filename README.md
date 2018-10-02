@@ -7,7 +7,6 @@ Can download the formatted taxonomy in an OTU table or a melted table for R anal
 
 ## REQUIREMENTS:
 R Studio with the following packages installed: reshape2, dplyr, ggplot2, shiny
-library(ggplot2)
 ```
 	Install a package with: install.packages("shiny")
 ```
