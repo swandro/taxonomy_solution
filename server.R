@@ -238,7 +238,10 @@ function(input, output, session){
     #Melt data
     dat.melt <- melt(dat, id.vars = lev.list)
     dat.melt$value <- as.numeric(dat.melt$value)
-
+    if ("L7"%in%colnames(dat.melt)){
+      temp <- apply(dat.melt, 1, function(x){return(paste(as.character(x["L6"]), as.character(x["L7"])))})
+    dat.melt$L7 <- temp
+    }
     #Get number of samples
     NUMBER.SAMPLES$num <<- length(levels(factor(dat.melt$variable)))
     
