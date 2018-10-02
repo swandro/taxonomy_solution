@@ -6,9 +6,10 @@ Can handle taxonomy in any format (such as D_0__Bacteria;D_1__Actinobacteria;D_2
 Can download the formatted taxonomy in an OTU table or a melted table for R analysis.
 
 ## REQUIREMENTS:
-R Studio with the following packages installed: reshape2, dplyr, ggplot2, shiny
+R Studio with the following packages installed: reshape2, dplyr, ggplot2, shiny.  
+Install a package with:
 ```
-	Install a package with: install.packages("shiny")
+	 install.packages("shiny")
 ```
 
 ## HOW TO RUN
