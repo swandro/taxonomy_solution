@@ -18,3 +18,6 @@ In R, run these two lines:
 	library(shiny)
 	runGitHub("taxonomy_solution","swandro")
 ```
+
+## UPLOAD DATA
+Upload the matrix of relative abundances produced from metaphlan2 or MIDAS as a tab separated text file. Samples can be in rows or columns.
