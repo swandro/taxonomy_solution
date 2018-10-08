@@ -1,4 +1,5 @@
 library(reshape2)
+library(dplyr)
 library(ggplot2)
 library(shiny)
 
@@ -98,7 +99,7 @@ collapse.to.level <- function(DF, LEVEL){
 make.other.category <- function(DF, LEVEL, NUMBER){
   #Makes the other category for a melted data frame
   #Decides top microbes by greatest sum in all samples
-  temp <- summarize(group_by_(DF,LEVEL),value=sum(value))
+  temp <- DF %>% group_by_(LEVEL) %>% summarize(value=sum(value))
   temp <- temp[order(temp$value, decreasing = T),]
   top.taxa <- data.frame(temp[1:NUMBER,1])[,1]
   #Add in "Other" only if it doesn't already exist
@@ -114,7 +115,7 @@ make.other.category <- function(DF, LEVEL, NUMBER){
   temp2[[LEVEL]] <- factor(temp2[[LEVEL]], levels=top.taxa)
   #Change all NA to "Other"
   temp2[[LEVEL]][which(is.na(temp2[[LEVEL]]))] <- "Other"
-  temp2 <- summarize(group_by_(temp2, "variable", LEVEL),value=sum(value))
+  temp2 <- temp2 %>% group_by_("variable", LEVEL) %>% summarize(value=sum(value))
   colnames(temp2) <- c("variable","taxonomy","value")
   
   #Add back in metadata
@@ -237,7 +238,10 @@ function(input, output, session){
     #Melt data
     dat.melt <- melt(dat, id.vars = lev.list)
     dat.melt$value <- as.numeric(dat.melt$value)
-
+    if ("L7"%in%colnames(dat.melt)){
+      temp <- apply(dat.melt, 1, function(x){return(paste(as.character(x["L6"]), as.character(x["L7"])))})
+    dat.melt$L7 <- temp
+    }
     #Get number of samples
     NUMBER.SAMPLES$num <<- length(levels(factor(dat.melt$variable)))
     
@@ -254,7 +258,10 @@ function(input, output, session){
 
   output$top.taxa.table <- renderTable({
     data <- melted.other.dat()
-    data.condensed <- as.data.frame(summarize(group_by(data ,taxonomy),abundance = round(sum(value), 1)))
+    data.condensed <- data %>% 
+      group_by(taxonomy) %>% 
+      summarize(abundance = round(sum(value), 1)) %>%
+      as.data.frame()
     tot <- sum(data.condensed[,2])
     data.condensed[,2] <- data.condensed[,2]/tot
     return(data.condensed)
