@@ -20,4 +20,4 @@ In R, run these two lines:
 ```
 
 ## UPLOAD DATA
-Upload the matrix of relative abundances produced from metaphlan2 or MIDAS as a tab separated text file. Samples can be in rows or columns.
+Upload the matrix of relative abundances produced from metaphlan2 or MIDAS as a <strong>tab separated</strong> text file. Samples can be in rows or columns.
