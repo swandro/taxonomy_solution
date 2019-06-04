@@ -22,7 +22,7 @@ fluidPage(
           selectInput(inputId = "TaxLev",
                       label = "Taxonomic Level",
                       choices = c("L1","L2","L3","L4","L5","L6","L7"),
-                      selected = "L2",
+                      selected = "L1",
                       width=170),
           numericInput(inputId= "num.taxa", label = "Number of taxa to plot", value = 3,min = 1, max=11, width=170),
           actionButton("graph.button",tags$strong("Plot"), width=170, style='padding:20px'),

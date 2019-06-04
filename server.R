@@ -17,7 +17,8 @@ determine.delimiter <- function(string){
       return(delim)
     }
   }
-  stop("Could not determine delimeter")
+  return(NA)
+  #stop("Could not determine delimeter")
 }
 
 invert <- function(x){
@@ -193,7 +194,17 @@ function(input, output, session){
       dat <- sample.data
     } else {
     dat <- uploaded.dat()
-    } 
+    }
+	
+	#normalize data
+    if (input$NORMALIZE){
+      sums <- apply(dat, 2, sum)
+      sums[which(sums==0)] <- 1
+      for (i in seq(ncol(dat))){
+        dat[,i] <- dat[,i]/sums[i]
+      }
+    }
+	
     ####Format taxonomy
     #Get vector of all taxonomies
     taxonomy.list <- rownames(dat)
@@ -204,18 +215,15 @@ function(input, output, session){
     }
     #Get the delimiter
     DELIMITER <- determine.delimiter(taxonomy.list[length(taxonomy.list)])
-    
+    if(is.na(DELIMITER)){
+      TAX.COUNT <- 1
+      lev.list <- c("L1")
+      dat[["L1"]] <- rownames(dat)
+    }else{
     #If the taxa is redundant because there are multiple levels, remove redundant info
     dat <- shorten.levels(dat, DELIMITER)
     
-    #normalize data
-    if (input$NORMALIZE){
-      sums <- apply(dat, 2, sum)
-      sums[which(sums==0)] <- 1
-      for (i in seq(ncol(dat))){
-        dat[,i] <- dat[,i]/sums[i]
-      }
-    }
+
     #Get the number of taxonomy levels
     TAX.COUNT <- lengths(regmatches(DELIMITER, gregexpr(DELIMITER, taxonomy.list[length(taxonomy.list)]))) + 1 #taxonomy fields is the number of delimiters + 1
     
@@ -233,7 +241,7 @@ function(input, output, session){
         dat[i,lev.list[j]] <- taxonomies[j]
       }
     }
-    
+    }
     #Melt data
     dat.melt <- melt(dat, id.vars = lev.list)
     dat.melt$value <- as.numeric(dat.melt$value)
