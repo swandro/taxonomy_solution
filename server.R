@@ -3,7 +3,6 @@ library(dplyr)
 library(ggplot2)
 library(shiny)
 
-
 #####Data importing and formatting functions###################################################################
 
 determine.delimiter <- function(string){
