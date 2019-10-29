@@ -3,6 +3,10 @@ library(dplyr)
 library(ggplot2)
 library(shiny)
 
+
+#Increase max file size:
+options(shiny.maxRequestSize=30*1024^2)
+
 #####Data importing and formatting functions###################################################################
 
 determine.delimiter <- function(string){
